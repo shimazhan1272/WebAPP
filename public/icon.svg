@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="100" fill="#0f172a"/>
+  <!-- Water waves -->
+  <path d="M64 360 C 128 340, 192 380, 256 360 C 320 340, 384 380, 448 360" stroke="#0284c7" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.6"/>
+  <path d="M64 410 C 128 390, 192 430, 256 410 C 320 390, 384 430, 448 410" stroke="#38bdf8" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.4"/>
+  <!-- Boat race hull -->
+  <polygon points="256,90 370,300 256,270 142,300" fill="white"/>
+  <polygon points="256,90 256,270 142,300" fill="#e2e8f0"/>
+  <!-- Boat cockpit and racer helmet -->
+  <circle cx="256" cy="200" r="28" fill="#ef4444"/>
+  <circle cx="256" cy="196" r="16" fill="#1e293b"/>
+  <!-- Racing stripes -->
+  <line x1="256" y1="90" x2="256" y2="270" stroke="#0284c7" stroke-width="8"/>
+</svg>

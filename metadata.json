@@ -1,0 +1,7 @@
+{
+  "name": "ボートレースAI予想",
+  "description": "統計モデルによる全国24場のボートレースAI予想・スリット隊形・買い目フォーメーション算出Webアプリ",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

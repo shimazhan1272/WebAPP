@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, Loader2, Calendar, MapPin, Flag } from 'lucide-react';
 import { STADIUMS } from '../types/boatrace';
+import { RaceScheduleItem } from '../services/boatraceApi';
 
 interface InputAreaProps {
   date: string;
@@ -11,7 +12,8 @@ interface InputAreaProps {
   nTrio: number;
   isLoading: boolean;
   activeStadiumCodes?: number[];
-  raceSchedule?: { raceNumber: number; closedAt: string; title?: string }[];
+  stadiumRaces?: Record<number, RaceScheduleItem[]>;
+  raceSchedule?: RaceScheduleItem[];
   onDateChange: (date: string) => void;
   onStadiumChange: (code: number) => void;
   onRaceNumberChange: (num: number) => void;
@@ -30,6 +32,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
   nTrio,
   isLoading,
   activeStadiumCodes,
+  stadiumRaces,
   raceSchedule,
   onDateChange,
   onStadiumChange,
@@ -42,6 +45,16 @@ export const InputArea: React.FC<InputAreaProps> = ({
   // 0〜30 の選択肢リスト
   const betCountOptions = Array.from({ length: 31 }, (_, i) => i);
 
+  // 15秒ごとのタイマーで締切状態をリアルタイム判定
+  const [now, setNow] = React.useState<number>(() => Date.now());
+
+  React.useEffect(() => {
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
+
   // 開催場のみフィルタ（開催データがある場合は非開催場を非表示）
   const displayStadiums = React.useMemo(() => {
     if (activeStadiumCodes && activeStadiumCodes.length > 0) {
@@ -49,6 +62,37 @@ export const InputArea: React.FC<InputAreaProps> = ({
     }
     return STADIUMS;
   }, [activeStadiumCodes]);
+
+  // レース場が終了しているか判定（12Rの締切時刻を過ぎているか）
+  const isStadiumFinished = React.useCallback(
+    (code: number): boolean => {
+      const races = stadiumRaces?.[code];
+      if (!races || races.length === 0) return false;
+      const lastRace = races[races.length - 1];
+      if (lastRace && lastRace.deadlineTimestamp > 0) {
+        return now > lastRace.deadlineTimestamp;
+      }
+      return false;
+    },
+    [stadiumRaces, now]
+  );
+
+  const isCurrentStadiumFinished = isStadiumFinished(stadiumCode);
+
+  // 各レースの状態（finished: 終了 / imminent: 締切10分前 / normal: 通常）
+  const getRaceStatus = React.useCallback(
+    (r: number): 'finished' | 'imminent' | 'normal' => {
+      const sched = raceSchedule?.find((s) => s.raceNumber === r);
+      if (!sched || sched.deadlineTimestamp <= 0) return 'normal';
+      const diffMs = sched.deadlineTimestamp - now;
+      if (diffMs < 0) return 'finished';
+      if (diffMs <= 10 * 60 * 1000) return 'imminent';
+      return 'normal';
+    },
+    [raceSchedule, now]
+  );
+
+  const currentRaceStatus = getRaceStatus(raceNumber);
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5 shadow-lg">
@@ -97,47 +141,113 @@ export const InputArea: React.FC<InputAreaProps> = ({
             />
           </div>
 
-          {/* レース場（開催場のみ表示） */}
+          {/* レース場（開催場のみ表示、終了した場はグレー文字） */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-1.5">
-              <MapPin className="w-3.5 h-3.5 text-sky-400" />
-              <span>
-                レース場
-                {activeStadiumCodes && activeStadiumCodes.length > 0
-                  ? `（開催: ${displayStadiums.length}場）`
-                  : '（全24場）'}
-              </span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                <MapPin className="w-3.5 h-3.5 text-sky-400" />
+                <span>レース場</span>
+              </label>
+              {isCurrentStadiumFinished ? (
+                <span className="text-[10px] text-slate-500 font-semibold px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700">
+                  全R終了
+                </span>
+              ) : activeStadiumCodes && activeStadiumCodes.length > 0 ? (
+                <span className="text-[10px] text-emerald-400 font-semibold px-1.5 py-0.5 rounded bg-emerald-950/50 border border-emerald-800/50">
+                  開催中
+                </span>
+              ) : null}
+            </div>
             <select
               value={stadiumCode}
               onChange={(e) => onStadiumChange(Number(e.target.value))}
-              className="w-full h-11 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
+              className={`w-full h-11 px-3 rounded-lg bg-slate-800 border text-sm transition focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-transparent ${
+                isCurrentStadiumFinished
+                  ? 'border-slate-700/80 text-slate-500 font-normal'
+                  : 'border-slate-700 text-white font-medium'
+              }`}
             >
-              {displayStadiums.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {String(s.code).padStart(2, '0')} {s.name} ({s.location})
-                </option>
-              ))}
+              {displayStadiums.map((s) => {
+                const finished = isStadiumFinished(s.code);
+                const codeStr = String(s.code).padStart(2, '0');
+                const label = `${codeStr}_${s.name}${finished ? ' [終了]' : ''}`;
+                return (
+                  <option
+                    key={s.code}
+                    value={s.code}
+                    className={
+                      finished
+                        ? 'text-slate-500 bg-slate-900 font-normal'
+                        : 'text-slate-100 bg-slate-900 font-medium'
+                    }
+                  >
+                    {label}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
-          {/* レース番号（1〜12、締切時刻を表示: 例 6R 16:10締切） */}
+          {/* レース番号（1〜12、締切10分前は赤文字、終わったレースはグレー文字） */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-1.5">
-              <Flag className="w-3.5 h-3.5 text-sky-400" />
-              <span>レース番号</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                <Flag
+                  className={`w-3.5 h-3.5 ${
+                    currentRaceStatus === 'imminent'
+                      ? 'text-rose-400 animate-pulse'
+                      : currentRaceStatus === 'finished'
+                      ? 'text-slate-500'
+                      : 'text-sky-400'
+                  }`}
+                />
+                <span>レース番号</span>
+              </label>
+              {currentRaceStatus === 'imminent' && (
+                <span className="text-[10px] font-bold text-rose-400 bg-rose-950/80 border border-rose-600/80 px-1.5 py-0.5 rounded animate-pulse">
+                  🔥 締切直前（10分前）
+                </span>
+              )}
+              {currentRaceStatus === 'finished' && (
+                <span className="text-[10px] text-slate-500 font-normal px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700">
+                  終了
+                </span>
+              )}
+            </div>
             <select
               value={raceNumber}
               onChange={(e) => onRaceNumberChange(Number(e.target.value))}
-              className="w-full h-11 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
+              className={`w-full h-11 px-3 rounded-lg bg-slate-800 border text-sm transition focus:outline-hidden focus:ring-2 ${
+                currentRaceStatus === 'imminent'
+                  ? 'border-rose-500 text-rose-400 font-bold bg-rose-950/30 focus:ring-rose-500 ring-1 ring-rose-500/40'
+                  : currentRaceStatus === 'finished'
+                  ? 'border-slate-700/80 text-slate-500 font-normal focus:ring-sky-500'
+                  : 'border-slate-700 text-white font-semibold focus:ring-sky-500 focus:border-transparent'
+              }`}
             >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((r) => {
                 const sched = raceSchedule?.find((s) => s.raceNumber === r);
                 const closedAt = sched?.closedAt;
-                const label = closedAt ? `${r}R ${closedAt}締切` : `${r}R`;
+                const status = getRaceStatus(r);
+
+                let label = `${r}R`;
+                let optionClass = 'text-slate-100 bg-slate-900';
+
+                if (closedAt) {
+                  if (status === 'finished') {
+                    label = `${r}R ${closedAt}締切 [終了]`;
+                    optionClass = 'text-slate-500 bg-slate-900 font-normal';
+                  } else if (status === 'imminent') {
+                    label = `🔥 ${r}R ${closedAt}締切 [締切10分前]`;
+                    optionClass = 'text-rose-400 bg-slate-900 font-bold';
+                  } else {
+                    label = `${r}R ${closedAt}締切`;
+                    optionClass = 'text-slate-100 bg-slate-900 font-medium';
+                  }
+                }
+
                 return (
-                  <option key={r} value={r}>
+                  <option key={r} value={r} className={optionClass}>
                     {label}
                   </option>
                 );

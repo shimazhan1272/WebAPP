@@ -130,6 +130,7 @@ export interface RaceScheduleItem {
   raceNumber: number;
   closedAt: string; // e.g. "16:10"
   title?: string;
+  deadlineTimestamp: number; // UTC ms
 }
 
 export interface DaySchedule {
@@ -166,24 +167,45 @@ export async function fetchDaySchedule(dateStr: string): Promise<DaySchedule> {
         for (let r = 1; r <= 12; r++) {
           const race = racesObj[String(r)];
           let closedAt = '';
+          let deadlineTimestamp = 0;
+
           if (race?.closed_at) {
-            if (race.closed_at.includes(' ')) {
-              closedAt = race.closed_at.split(' ')[1].slice(0, 5);
-            } else if (race.closed_at.includes('T')) {
+            const raw = String(race.closed_at).trim();
+            if (raw.includes('T')) {
               try {
-                const d = new Date(race.closed_at);
+                const d = new Date(raw);
+                deadlineTimestamp = d.getTime();
                 closedAt = d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
               } catch {
                 closedAt = '';
               }
+            } else if (raw.includes(' ')) {
+              try {
+                const isoStr = raw.replace(' ', 'T') + '+09:00';
+                deadlineTimestamp = new Date(isoStr).getTime();
+                closedAt = raw.split(' ')[1].slice(0, 5);
+              } catch {
+                closedAt = raw.slice(0, 5);
+              }
             } else {
-              closedAt = race.closed_at.slice(0, 5);
+              closedAt = raw.slice(0, 5);
+              try {
+                deadlineTimestamp = new Date(`${dateStr}T${closedAt}:00+09:00`).getTime();
+              } catch {
+                deadlineTimestamp = 0;
+              }
             }
           }
+
+          if (isNaN(deadlineTimestamp)) {
+            deadlineTimestamp = 0;
+          }
+
           items.push({
             raceNumber: r,
             closedAt,
             title: race?.title || race?.subtitle || '',
+            deadlineTimestamp,
           });
         }
         stadiumRaces[sCode] = items;

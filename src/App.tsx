@@ -320,6 +320,7 @@ export default function App() {
             nTrio={nTrio}
             isLoading={isLoading}
             activeStadiumCodes={daySchedule.activeStadiumCodes}
+            stadiumRaces={daySchedule.stadiumRaces}
             raceSchedule={daySchedule.stadiumRaces[stadiumCode] || []}
             onDateChange={setDate}
             onStadiumChange={setStadiumCode}

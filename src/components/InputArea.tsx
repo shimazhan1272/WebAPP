@@ -51,10 +51,31 @@ export const InputArea: React.FC<InputAreaProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* 年月日 */}
           <div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-1.5">
-              <Calendar className="w-3.5 h-3.5 text-sky-400" />
-              <span>開催日（年月日）</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                <Calendar className="w-3.5 h-3.5 text-sky-400" />
+                <span>開催日（年月日）</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const parts = new Intl.DateTimeFormat('ja-JP', {
+                      timeZone: 'Asia/Tokyo',
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    }).format(new Date());
+                    onDateChange(parts.replace(/\//g, '-'));
+                  } catch {
+                    // fallback
+                  }
+                }}
+                className="text-[11px] font-bold text-sky-400 hover:text-sky-300 transition cursor-pointer px-1.5 py-0.5 rounded bg-sky-950/60 border border-sky-800/60"
+              >
+                今日
+              </button>
+            </div>
             <input
               type="date"
               value={date}

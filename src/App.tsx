@@ -12,7 +12,7 @@ import {
   BoatData,
 } from './types/boatrace';
 import { predict } from './utils/predictor';
-import { fetchRaceData, getNextRequestId } from './services/boatraceApi';
+import { fetchRaceData, getNextRequestId, getTodayJST } from './services/boatraceApi';
 import { InputArea } from './components/InputArea';
 import { ResultHeader } from './components/ResultHeader';
 import { RacerTable } from './components/RacerTable';
@@ -36,18 +36,18 @@ const LOCAL_STORAGE_KEYS = {
 };
 
 export default function App() {
-  // 今日の日付 (YYYY-MM-DD)
-  const getTodayStr = () => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
+  // 今日の日付 (日本標準時 JST 基準: YYYY-MM-DD)
+  const getTodayStr = () => getTodayJST();
 
   // 入力状態の復元 (localStorage)
   const [date, setDate] = useState<string>(() => {
-    return localStorage.getItem(LOCAL_STORAGE_KEYS.DATE) || getTodayStr();
+    const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.DATE);
+    const today = getTodayJST();
+    // 過去の別の日が保存されている場合は、最新の本日日付を優先
+    if (!saved || saved < today) {
+      return today;
+    }
+    return saved;
   });
   const [stadiumCode, setStadiumCode] = useState<number>(() => {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.STADIUM);

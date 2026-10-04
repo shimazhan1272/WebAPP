@@ -83,88 +83,241 @@ export function calcWindAdj(
 }
 
 /**
- * 3連単の買い目をフォーメーション形式に圧縮（カンマなし表記: 1-2-3456, 12-12-3456 など）
+ * 3連単の買い目をフォーメーション形式に圧縮（カンマなし表記: 1-34-2, 1-2-345, 12-12-34 など）
  */
 function compressTrifectaFormations(bets: BetCombination[]): FormationGroup[] {
   if (bets.length === 0) return [];
 
-  // 1-2着のペアでグルーピング
-  const pairMap = new Map<string, BetCombination[]>();
+  const betMap = new Map<string, BetCombination>();
   bets.forEach((b) => {
-    const key = `${b.combination[0]}-${b.combination[1]}`;
-    if (!pairMap.has(key)) pairMap.set(key, []);
-    pairMap.get(key)!.push(b);
+    betMap.set(`${b.combination[0]}-${b.combination[1]}-${b.combination[2]}`, b);
   });
 
-  // 各ペアの3着艇リストを作成
-  interface PairInfo {
-    first: number;
-    second: number;
-    thirds: number[];
-    bets: BetCombination[];
-    used: boolean;
-  }
-
-  const pairs: PairInfo[] = [];
-  pairMap.forEach((pBets, key) => {
-    const [f, s] = key.split('-').map(Number);
-    const thirds = pBets.map((b) => b.combination[2]).sort((a, b) => a - b);
-    pairs.push({
-      first: f,
-      second: s,
-      thirds,
-      bets: pBets,
-      used: false,
-    });
-  });
-
+  const remainingKeys = new Set(betMap.keys());
   const formations: FormationGroup[] = [];
+  const boats = [1, 2, 3, 4, 5, 6];
 
-  // パターンA: 2艇の表裏ボックスフォーメーション (例: 1-2-345 と 2-1-345 が同等の3着群を持つ場合 -> 12-12-345)
-  for (let i = 0; i < pairs.length; i++) {
-    if (pairs[i].used) continue;
-    const p1 = pairs[i];
-
-    // 表裏となるペアを探す
-    const revIndex = pairs.findIndex(
-      (p, j) =>
-        j > i &&
-        !p.used &&
-        p.first === p1.second &&
-        p.second === p1.first &&
-        p.thirds.length === p1.thirds.length &&
-        p.thirds.every((t, idx) => t === p1.thirds[idx])
-    );
-
-    if (revIndex !== -1) {
-      const p2 = pairs[revIndex];
-      p1.used = true;
-      p2.used = true;
-      const combinedBets = [...p1.bets, ...p2.bets];
-      const headStr = `${Math.min(p1.first, p2.first)}${Math.max(p1.first, p2.first)}`;
-      const thirdsStr = p1.thirds.join('');
-      formations.push({
-        formation: `${headStr}-${headStr}-${thirdsStr}`,
-        points: combinedBets.length,
-        totalProb: combinedBets.reduce((sum, b) => sum + b.prob, 0),
-        items: combinedBets,
-      });
-    }
+  interface Candidate {
+    formStr: string;
+    keys: string[];
+    typeRank: number;
   }
 
-  // パターンB: 通常の流しフォーメーション (1-2-3456)
-  for (let i = 0; i < pairs.length; i++) {
-    if (pairs[i].used) continue;
-    const p = pairs[i];
-    p.used = true;
-    const thirdsStr = p.thirds.join('');
-    const formStr = `${p.first}-${p.second}-${thirdsStr}`;
-    formations.push({
-      formation: formStr,
-      points: p.bets.length,
-      totalProb: p.bets.reduce((sum, b) => sum + b.prob, 0),
-      items: p.bets,
-    });
+  while (remainingKeys.size > 0) {
+    const candidates: Candidate[] = [];
+
+    // パターン1: 3艇ボックス (6点)
+    for (let i = 0; i < boats.length; i++) {
+      for (let j = i + 1; j < boats.length; j++) {
+        for (let k = j + 1; k < boats.length; k++) {
+          const trio = [boats[i], boats[j], boats[k]];
+          const perms = [
+            [trio[0], trio[1], trio[2]],
+            [trio[0], trio[2], trio[1]],
+            [trio[1], trio[0], trio[2]],
+            [trio[1], trio[2], trio[0]],
+            [trio[2], trio[0], trio[1]],
+            [trio[2], trio[1], trio[0]],
+          ];
+          const keys = perms.map((p) => `${p[0]}-${p[1]}-${p[2]}`);
+          if (keys.every((k) => remainingKeys.has(k))) {
+            candidates.push({
+              formStr: `${trio.join('')}BOX`,
+              keys,
+              typeRank: 6,
+            });
+          }
+        }
+      }
+    }
+
+    // パターン2: 表裏折り返し 12-12-S3 (例: 12-12-34)
+    for (let a = 1; a <= 6; a++) {
+      for (let b = a + 1; b <= 6; b++) {
+        const thirds: number[] = [];
+        for (let c = 1; c <= 6; c++) {
+          if (c !== a && c !== b) {
+            if (
+              remainingKeys.has(`${a}-${b}-${c}`) &&
+              remainingKeys.has(`${b}-${a}-${c}`)
+            ) {
+              thirds.push(c);
+            }
+          }
+        }
+        if (thirds.length >= 1) {
+          const keys: string[] = [];
+          thirds.forEach((c) => {
+            keys.push(`${a}-${b}-${c}`);
+            keys.push(`${b}-${a}-${c}`);
+          });
+          const headStr = `${a}${b}`;
+          const thirdsStr = thirds.sort((x, y) => x - y).join('');
+          candidates.push({
+            formStr: `${headStr}-${headStr}-${thirdsStr}`,
+            keys,
+            typeRank: 5,
+          });
+        }
+      }
+    }
+
+    // パターン3: 1着固定 × 2着群 × 3着群 直積 (例: 1-23-45)
+    for (let a = 1; a <= 6; a++) {
+      const other = boats.filter((x) => x !== a);
+      for (let s2Size = 2; s2Size <= 3; s2Size++) {
+        for (let s3Size = 2; s3Size <= 3; s3Size++) {
+          const getSubsets = (arr: number[], size: number): number[][] => {
+            if (size === 0) return [[]];
+            if (arr.length < size) return [];
+            const [first, ...rest] = arr;
+            return [
+              ...getSubsets(rest, size - 1).map((s) => [first, ...s]),
+              ...getSubsets(rest, size),
+            ];
+          };
+
+          const s2List = getSubsets(other, s2Size);
+          for (const s2 of s2List) {
+            const remS3 = other.filter((x) => !s2.includes(x));
+            const s3List = getSubsets(remS3, s3Size);
+            for (const s3 of s3List) {
+              const keys: string[] = [];
+              let allMatch = true;
+              for (const b of s2) {
+                for (const c of s3) {
+                  const key = `${a}-${b}-${c}`;
+                  if (remainingKeys.has(key)) {
+                    keys.push(key);
+                  } else {
+                    allMatch = false;
+                    break;
+                  }
+                }
+                if (!allMatch) break;
+              }
+              if (allMatch && keys.length >= 4) {
+                const s2Str = s2.sort((x, y) => x - y).join('');
+                const s3Str = s3.sort((x, y) => x - y).join('');
+                candidates.push({
+                  formStr: `${a}-${s2Str}-${s3Str}`,
+                  keys,
+                  typeRank: 4,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // パターン4: 1着 & 3着固定、2着まとめ (例: 1-34-2, 1-24-3)
+    for (let a = 1; a <= 6; a++) {
+      for (let c = 1; c <= 6; c++) {
+        if (a === c) continue;
+        const seconds: number[] = [];
+        for (let b = 1; b <= 6; b++) {
+          if (b !== a && b !== c && remainingKeys.has(`${a}-${b}-${c}`)) {
+            seconds.push(b);
+          }
+        }
+        if (seconds.length >= 2) {
+          const keys = seconds.map((b) => `${a}-${b}-${c}`);
+          const sStr = seconds.sort((x, y) => x - y).join('');
+          candidates.push({
+            formStr: `${a}-${sStr}-${c}`,
+            keys,
+            typeRank: 3,
+          });
+        }
+      }
+    }
+
+    // パターン5: 1着 & 2着固定、3着まとめ (例: 1-2-345)
+    for (let a = 1; a <= 6; a++) {
+      for (let b = 1; b <= 6; b++) {
+        if (a === b) continue;
+        const thirds: number[] = [];
+        for (let c = 1; c <= 6; c++) {
+          if (c !== a && c !== b && remainingKeys.has(`${a}-${b}-${c}`)) {
+            thirds.push(c);
+          }
+        }
+        if (thirds.length >= 2) {
+          const keys = thirds.map((c) => `${a}-${b}-${c}`);
+          const tStr = thirds.sort((x, y) => x - y).join('');
+          candidates.push({
+            formStr: `${a}-${b}-${tStr}`,
+            keys,
+            typeRank: 3,
+          });
+        }
+      }
+    }
+
+    // パターン6: 2着 & 3着固定、1着まとめ (例: 12-3-4)
+    for (let b = 1; b <= 6; b++) {
+      for (let c = 1; c <= 6; c++) {
+        if (b === c) continue;
+        const firsts: number[] = [];
+        for (let a = 1; a <= 6; a++) {
+          if (a !== b && a !== c && remainingKeys.has(`${a}-${b}-${c}`)) {
+            firsts.push(a);
+          }
+        }
+        if (firsts.length >= 2) {
+          const keys = firsts.map((a) => `${a}-${b}-${c}`);
+          const fStr = firsts.sort((x, y) => x - y).join('');
+          candidates.push({
+            formStr: `${fStr}-${b}-${c}`,
+            keys,
+            typeRank: 3,
+          });
+        }
+      }
+    }
+
+    // 候補の中から最も多くの未処理ベットをカバーし、かつ確率の高いものを選択
+    let best: Candidate | null = null;
+    let bestCover = 0;
+    let bestProb = 0;
+
+    for (const cand of candidates) {
+      const cover = cand.keys.length;
+      const prob = cand.keys.reduce((s, k) => s + (betMap.get(k)?.prob || 0), 0);
+      if (
+        cover > bestCover ||
+        (cover === bestCover && cand.typeRank > (best?.typeRank || 0)) ||
+        (cover === bestCover && cand.typeRank === (best?.typeRank || 0) && prob > bestProb)
+      ) {
+        best = cand;
+        bestCover = cover;
+        bestProb = prob;
+      }
+    }
+
+    if (best && bestCover >= 2) {
+      const items = best.keys.map((k) => betMap.get(k)!);
+      formations.push({
+        formation: best.formStr,
+        points: best.keys.length,
+        totalProb: items.reduce((s, b) => s + b.prob, 0),
+        items,
+      });
+      best.keys.forEach((k) => remainingKeys.delete(k));
+    } else {
+      // 1点単独の買い目
+      const nextKey = remainingKeys.values().next().value;
+      if (!nextKey) break;
+      const b = betMap.get(nextKey)!;
+      formations.push({
+        formation: `${b.combination[0]}-${b.combination[1]}-${b.combination[2]}`,
+        points: 1,
+        totalProb: b.prob,
+        items: [b],
+      });
+      remainingKeys.delete(nextKey);
+    }
   }
 
   // 確率降順でソート
@@ -173,68 +326,92 @@ function compressTrifectaFormations(bets: BetCombination[]): FormationGroup[] {
 }
 
 /**
- * 2連単の買い目をフォーメーション形式に圧縮（例: 1-234, 12-12）
+ * 2連単の買い目をフォーメーション形式に圧縮（例: 1-234, 34-2, 12-12）
  */
 function compressExactaFormations(bets: BetCombination[]): FormationGroup[] {
   if (bets.length === 0) return [];
 
-  // 1着でグループ化
-  const firstMap = new Map<number, BetCombination[]>();
+  const betMap = new Map<string, BetCombination>();
   bets.forEach((b) => {
-    const f = b.combination[0];
-    if (!firstMap.has(f)) firstMap.set(f, []);
-    firstMap.get(f)!.push(b);
+    betMap.set(`${b.combination[0]}-${b.combination[1]}`, b);
   });
 
+  const remainingKeys = new Set(betMap.keys());
   const formations: FormationGroup[] = [];
 
-  // 1-2 と 2-1 があり、他がなければ 12-12 表裏にまとめる
-  const betKeys = new Set(bets.map((b) => `${b.combination[0]}-${b.combination[1]}`));
-  const handledPairs = new Set<string>();
-
-  firstMap.forEach((fBets, first) => {
-    fBets.forEach((b) => {
-      const second = b.combination[1];
-      const pairKey = [first, second].sort().join('-');
-      if (!handledPairs.has(pairKey) && betKeys.has(`${second}-${first}`)) {
-        // 2艇の表裏
-        const b1 = b;
-        const b2 = bets.find(
-          (x) => x.combination[0] === second && x.combination[1] === first
-        )!;
-        const headStr = `${Math.min(first, second)}${Math.max(first, second)}`;
+  // 1. 表裏 12-12
+  for (let a = 1; a <= 6; a++) {
+    for (let b = a + 1; b <= 6; b++) {
+      const k1 = `${a}-${b}`;
+      const k2 = `${b}-${a}`;
+      if (remainingKeys.has(k1) && remainingKeys.has(k2)) {
+        const b1 = betMap.get(k1)!;
+        const b2 = betMap.get(k2)!;
         formations.push({
-          formation: `${headStr}-${headStr}`,
+          formation: `${a}${b}-${a}${b}`,
           points: 2,
           totalProb: b1.prob + b2.prob,
           items: [b1, b2],
         });
-        handledPairs.add(pairKey);
+        remainingKeys.delete(k1);
+        remainingKeys.delete(k2);
       }
-    });
-  });
-
-  // 未処理のベットを1着固定フォーメーションにする
-  const coveredBets = new Set<string>(
-    formations.flatMap((f) => f.items.map((b) => `${b.combination[0]}-${b.combination[1]}`))
-  );
-
-  firstMap.forEach((fBets, first) => {
-    const remaining = fBets.filter(
-      (b) => !coveredBets.has(`${b.combination[0]}-${b.combination[1]}`)
-    );
-    if (remaining.length > 0) {
-      const secondsStr = remaining
-        .map((b) => b.combination[1])
-        .sort((a, b) => a - b)
-        .join('');
-      formations.push({
-        formation: `${first}-${secondsStr}`,
-        points: remaining.length,
-        totalProb: remaining.reduce((sum, b) => sum + b.prob, 0),
-        items: remaining,
-      });
     }
+  }
+
+  // 2. 1着固定流し (例: 1-234)
+  for (let a = 1; a <= 6; a++) {
+    const seconds: number[] = [];
+    for (let b = 1; b <= 6; b++) {
+      if (a !== b && remainingKeys.has(`${a}-${b}`)) {
+        seconds.push(b);
+      }
+    }
+    if (seconds.length >= 2) {
+      const keys = seconds.map((b) => `${a}-${b}`);
+      const items = keys.map((k) => betMap.get(k)!);
+      const sStr = seconds.sort((x, y) => x - y).join('');
+      formations.push({
+        formation: `${a}-${sStr}`,
+        points: seconds.length,
+        totalProb: items.reduce((sum, b) => sum + b.prob, 0),
+        items,
+      });
+      keys.forEach((k) => remainingKeys.delete(k));
+    }
+  }
+
+  // 3. 2着固定流し (例: 34-2)
+  for (let b = 1; b <= 6; b++) {
+    const firsts: number[] = [];
+    for (let a = 1; a <= 6; a++) {
+      if (a !== b && remainingKeys.has(`${a}-${b}`)) {
+        firsts.push(a);
+      }
+    }
+    if (firsts.length >= 2) {
+      const keys = firsts.map((a) => `${a}-${b}`);
+      const items = keys.map((k) => betMap.get(k)!);
+      const fStr = firsts.sort((x, y) => x - y).join('');
+      formations.push({
+        formation: `${fStr}-${b}`,
+        points: firsts.length,
+        totalProb: items.reduce((sum, b) => sum + b.prob, 0),
+        items,
+      });
+      keys.forEach((k) => remainingKeys.delete(k));
+    }
+  }
+
+  // 4. 残りの単独点
+  remainingKeys.forEach((key) => {
+    const b = betMap.get(key)!;
+    formations.push({
+      formation: `${b.combination[0]}-${b.combination[1]}`,
+      points: 1,
+      totalProb: b.prob,
+      items: [b],
+    });
   });
 
   formations.sort((a, b) => b.totalProb - a.totalProb);

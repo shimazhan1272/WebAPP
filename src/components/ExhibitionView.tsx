@@ -21,9 +21,9 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
   });
 
   // SVGの横幅・スリット基準位置
-  const svgWidth = 540;
-  const svgHeight = 240;
-  const slitX = 440; // スリットラインのX座標
+  const svgWidth = 560;
+  const svgHeight = 264;
+  const slitX = 455; // スリットラインのX座標
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5 shadow-lg">
@@ -43,7 +43,7 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
           className="w-full h-auto select-none block"
-          style={{ maxHeight: '320px' }}
+          style={{ maxHeight: '340px' }}
         >
           {/* 水面背景グラデーション */}
           <defs>
@@ -56,54 +56,54 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
 
           {/* 水面領域（コース・展示タイム列を除く右側水面） */}
           <rect
-            x="80"
-            y="22"
-            width={svgWidth - 90}
-            height={svgHeight - 28}
+            x="92"
+            y="26"
+            width={svgWidth - 104}
+            height={svgHeight - 32}
             fill="url(#waterGrad)"
             rx="6"
           />
 
-          {/* ヘッダーラベル: 進入コース・展示タイム */}
+          {/* ヘッダーラベル: 進入コース・展示タイム（見やすい文字サイズ） */}
           <text
-            x="20"
-            y="14"
+            x="24"
+            y="17"
             fill="#94a3b8"
-            fontSize="9"
+            fontSize="12"
             fontWeight="bold"
             textAnchor="middle"
           >
             コース
           </text>
           <text
-            x="54"
-            y="14"
+            x="64"
+            y="17"
             fill="#fde047"
-            fontSize="9"
+            fontSize="12"
             fontWeight="bold"
             textAnchor="middle"
           >
             展示T
           </text>
 
-          {/* ヘッダー区切り線 */}
+          {/* ヘッダー区切り縦線 */}
           <line
-            x1="76"
+            x1="88"
             y1="6"
-            x2="76"
+            x2="88"
             y2={svgHeight - 8}
             stroke="#1e293b"
-            strokeWidth="1"
+            strokeWidth="1.2"
           />
 
           {/* コースレーン破線 */}
           {[1, 2, 3, 4, 5].map((lane) => (
             <line
               key={lane}
-              x1="80"
-              y1={lane * 35 + 24}
-              x2={svgWidth - 12}
-              y2={lane * 35 + 24}
+              x1="92"
+              y1={lane * 38 + 26}
+              x2={svgWidth - 14}
+              y2={lane * 38 + 26}
               stroke="#1e293b"
               strokeWidth="1"
               strokeDasharray="4 4"
@@ -113,20 +113,20 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
           {/* スリットライン（スタートライン） */}
           <line
             x1={slitX}
-            y1="22"
+            y1="26"
             x2={slitX}
             y2={svgHeight - 8}
             stroke="#ef4444"
-            strokeWidth="2"
+            strokeWidth="2.5"
             strokeDasharray="5 3"
           />
 
-          {/* スリットライン ラベル */}
+          {/* スリットライン ラベル（視認性向上） */}
           <text
             x={slitX}
-            y="14"
+            y="17"
             fill="#ef4444"
-            fontSize="10"
+            fontSize="12.5"
             fontWeight="bold"
             textAnchor="middle"
             className="font-mono tracking-wider"
@@ -136,35 +136,33 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
 
           {/* 進行方向インジケーター矢印 */}
           <path
-            d={`M ${slitX - 55} 12 L ${slitX - 18} 12 L ${slitX - 23} 9 M ${slitX - 18} 12 L ${slitX - 23} 15`}
+            d={`M ${slitX - 60} 14 L ${slitX - 20} 14 L ${slitX - 26} 10 M ${slitX - 20} 14 L ${slitX - 26} 18`}
             stroke="#38bdf8"
-            strokeWidth="1.2"
+            strokeWidth="1.5"
             fill="none"
-            opacity="0.85"
+            opacity="0.9"
           />
           <text
-            x={slitX - 60}
-            y="14"
+            x={slitX - 66}
+            y="17"
             fill="#38bdf8"
-            fontSize="8"
+            fontSize="10.5"
+            fontWeight="500"
             textAnchor="end"
-            opacity="0.85"
+            opacity="0.9"
           >
             進行方向
           </text>
 
           {/* 6コース分のボート・進入コース・展示タイム・STプロット */}
           {courseItems.map((item, idx) => {
-            const rowY = 42 + idx * 35;
+            const rowY = 46 + idx * 38;
             const boatNum = item.boat?.boatNumber ?? item.course;
             const color = item.color;
             const st = item.st;
 
             // ST に応じた X 座標計算
-            // 基準: st === 0.00 -> slitX
-            // st > 0 (通常) -> slitX より手前（左）。
-            // st < 0 (フライング F) -> slitX より先（右）。
-            let boatX = slitX - 110;
+            let boatX = slitX - 120;
             let isFlying = false;
             let stLabel = '—';
 
@@ -172,35 +170,35 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
               if (st < 0) {
                 isFlying = true;
                 stLabel = `F.${Math.abs(st * 100).toFixed(0).padStart(2, '0')}`;
-                boatX = slitX + Math.min(45, Math.abs(st) * 350);
+                boatX = slitX + Math.min(48, Math.abs(st) * 360);
               } else {
                 stLabel = `.${(st * 100).toFixed(0).padStart(2, '0')}`;
-                boatX = slitX - Math.min(230, Math.max(25, st * 550));
+                boatX = slitX - Math.min(230, Math.max(30, st * 550));
               }
             } else {
-              boatX = slitX - (100 + idx * 8);
+              boatX = slitX - (110 + idx * 8);
             }
 
             return (
               <g key={item.course}>
-                {/* 1. 進入コース番号 (左端) */}
+                {/* 1. 進入コース番号 (大きく見やすい13px太字) */}
                 <text
-                  x="20"
-                  y={rowY + 4}
-                  fill="#94a3b8"
-                  fontSize="11"
+                  x="24"
+                  y={rowY + 4.5}
+                  fill="#cbd5e1"
+                  fontSize="13.5"
                   fontWeight="bold"
                   textAnchor="middle"
                 >
                   {item.course}C
                 </text>
 
-                {/* 2. 展示タイム（進入コースの右隣に表示！） */}
+                {/* 2. 展示タイム（進入コースの右隣、視認性高い13px太字フォント） */}
                 <text
-                  x="54"
-                  y={rowY + 4}
+                  x="64"
+                  y={rowY + 4.5}
                   fill="#fde047"
-                  fontSize="11"
+                  fontSize="13.5"
                   fontWeight="bold"
                   fontFamily="monospace"
                   textAnchor="middle"
@@ -210,61 +208,61 @@ export const ExhibitionView: React.FC<ExhibitionViewProps> = ({ boats, courses }
 
                 {/* 航跡波（スタート手前） */}
                 <line
-                  x1="86"
+                  x1="98"
                   y1={rowY}
-                  x2={boatX - 18}
+                  x2={boatX - 22}
                   y2={rowY}
                   stroke="#0284c7"
-                  strokeWidth="1.2"
+                  strokeWidth="1.5"
                   strokeDasharray="2 4"
-                  opacity="0.4"
+                  opacity="0.45"
                 />
 
                 {/* ボート船体シルエット */}
                 <path
-                  d={`M ${boatX + 14} ${rowY} L ${boatX - 14} ${rowY - 7} L ${boatX - 18} ${rowY + 7} Z`}
+                  d={`M ${boatX + 16} ${rowY} L ${boatX - 16} ${rowY - 8.5} L ${boatX - 21} ${rowY + 8.5} Z`}
                   fill={color.hex}
                   stroke={color.textHex === '#0f172a' ? '#475569' : '#000000'}
-                  strokeWidth="0.8"
-                  filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.5))"
+                  strokeWidth="1"
+                  filter="drop-shadow(0px 1.5px 2px rgba(0,0,0,0.6))"
                 />
 
-                {/* 艇番サークル */}
+                {/* 艇番サークル（直径23px、視認性アップ） */}
                 <circle
-                  cx={boatX - 2}
+                  cx={boatX - 2.5}
                   cy={rowY}
-                  r="9.5"
+                  r="11.5"
                   fill={color.hex}
                   stroke={color.textHex === '#0f172a' ? '#64748b' : '#334155'}
-                  strokeWidth="1.2"
+                  strokeWidth="1.5"
                 />
                 <text
-                  x={boatX - 2}
-                  y={rowY + 3.5}
+                  x={boatX - 2.5}
+                  y={rowY + 4.5}
                   fill={color.textHex}
-                  fontSize="10"
+                  fontSize="12.5"
                   fontWeight="bold"
                   textAnchor="middle"
                 >
                   {boatNum}
                 </text>
 
-                {/* ST ラベル */}
+                {/* ST ラベルバッジ（フォントサイズ12px・視認性アップ） */}
                 <rect
-                  x={boatX + 18}
-                  y={rowY - 8}
-                  width="38"
-                  height="16"
-                  rx="3.5"
+                  x={boatX + 20}
+                  y={rowY - 9.5}
+                  width="44"
+                  height="19"
+                  rx="4"
                   fill={isFlying ? '#991b1b' : '#1e293b'}
                   stroke={isFlying ? '#ef4444' : '#334155'}
-                  strokeWidth="0.8"
+                  strokeWidth="1"
                 />
                 <text
-                  x={boatX + 37}
-                  y={rowY + 3.5}
+                  x={boatX + 42}
+                  y={rowY + 4.5}
                   fill={isFlying ? '#fecaca' : '#38bdf8'}
-                  fontSize="9.5"
+                  fontSize="12"
                   fontWeight="bold"
                   fontFamily="monospace"
                   textAnchor="middle"

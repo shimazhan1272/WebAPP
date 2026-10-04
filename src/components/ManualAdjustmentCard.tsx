@@ -48,12 +48,19 @@ export const ManualAdjustmentCard: React.FC<ManualAdjustmentCardProps> = ({
 
   const windDir: WindDirection = weather?.windDirection ?? '無風';
 
-  // 展示タイム入力ハンドラー（666と入力すると自動で6.66に変換）
+  // 展示タイム入力ハンドラー
+  // 例:「75」と入力すると即座に「6.75」に変換、「666」と入力すると「6.66」に変換
   const handleExTimeTextChange = (idx: number, rawVal: string) => {
     let val = rawVal.trim();
 
-    // 3桁の整数が入力された場合（例: 666 -> 6.66, 672 -> 6.72）
-    if (/^\d{3}$/.test(val)) {
+    // 2桁（例: 75 -> 6.75, 80 -> 6.80, 52 -> 6.52）の自動補完
+    // 先頭が4〜9の2桁数字は、ボートレース展示タイム（6.40〜6.99）の小数部分として即時 6.XX に補完
+    if (/^[4-9]\d$/.test(val)) {
+      const num = parseInt(val, 10);
+      val = (6 + num / 100).toFixed(2);
+    }
+    // 3桁の整数が入力された場合（例: 666 -> 6.66, 675 -> 6.75）
+    else if (/^\d{3}$/.test(val)) {
       const num = parseInt(val, 10);
       val = (num / 100).toFixed(2);
     }
@@ -75,15 +82,25 @@ export const ManualAdjustmentCard: React.FC<ManualAdjustmentCardProps> = ({
     }
   };
 
-  // 展示タイム blur ハンドラー（3桁以上の整数が残っていた場合もフォーマット）
+  // 展示タイム blur ハンドラー（2桁「68」や3桁が残っていた場合もフォーマット）
   const handleExTimeBlur = (idx: number) => {
     const rawVal = exTimeInputs[idx]?.trim() || '';
-    if (/^\d{3,}$/.test(rawVal)) {
+    let formatted: string | null = null;
+
+    if (/^\d{2}$/.test(rawVal)) {
+      // 2桁の場合（例: 75 -> 6.75, 68 -> 6.68, 05 -> 6.05）
       const num = parseInt(rawVal, 10);
-      const formatted = (num / 100).toFixed(2);
+      formatted = (6 + num / 100).toFixed(2);
+    } else if (/^\d{3,}$/.test(rawVal)) {
+      // 3桁以上の場合（例: 666 -> 6.66）
+      const num = parseInt(rawVal, 10);
+      formatted = (num / 100).toFixed(2);
+    }
+
+    if (formatted) {
       setExTimeInputs((prev) => {
         const next = [...prev];
-        next[idx] = formatted;
+        next[idx] = formatted!;
         return next;
       });
       onExTimeChange(idx, parseFloat(formatted));
@@ -164,12 +181,12 @@ export const ManualAdjustmentCard: React.FC<ManualAdjustmentCardProps> = ({
 
           {/* 1. 各艇の展示タイム & 進入コース */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <h4 className="text-xs font-bold text-sky-400 uppercase tracking-wider">
                 1. 各艇の展示タイム & 進入コース（6艇分）
               </h4>
               <span className="text-[11px] text-amber-400/90 font-mono">
-                ※「666」と入力すると自動で「6.66」になります
+                ※「75」→「6.75」、「666」→「6.66」と自動補完されます
               </span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -199,7 +216,7 @@ export const ManualAdjustmentCard: React.FC<ManualAdjustmentCardProps> = ({
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                      {/* 展示タイム (666 -> 6.66 自動変換) */}
+                      {/* 展示タイム (75 -> 6.75, 666 -> 6.66 自動変換) */}
                       <div>
                         <label className="block text-[10px] text-slate-400 mb-1">
                           展示タイム
@@ -207,7 +224,7 @@ export const ManualAdjustmentCard: React.FC<ManualAdjustmentCardProps> = ({
                         <input
                           type="text"
                           inputMode="decimal"
-                          placeholder="例: 6.66"
+                          placeholder="例: 75 または 6.75"
                           value={exTimeInputs[idx] ?? ''}
                           onChange={(e) => handleExTimeTextChange(idx, e.target.value)}
                           onBlur={() => handleExTimeBlur(idx)}

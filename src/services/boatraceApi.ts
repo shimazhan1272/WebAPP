@@ -126,12 +126,77 @@ function parseWindDirection(dirNum: unknown, dirStr?: string): WindDirection {
 // Boatrace Open API v1 (最新統合API: 出走表 & 直前情報を一度に取得)
 // --------------------------------------------------------------------------
 
+export interface RaceScheduleItem {
+  raceNumber: number;
+  closedAt: string; // e.g. "16:10"
+  title?: string;
+}
+
+export interface DaySchedule {
+  activeStadiumCodes: number[];
+  stadiumRaces: Record<number, RaceScheduleItem[]>;
+}
+
 interface DayDataCache {
   date: string;
   timestamp: number;
   data: any;
 }
 let cachedDayData: DayDataCache | null = null;
+
+/**
+ * 指定日の開催場一覧および各場の全レース締切時刻スケジュールを取得
+ */
+export async function fetchDaySchedule(dateStr: string): Promise<DaySchedule> {
+  const yyyymmdd = dateStr.replace(/-/g, '');
+  const year = dateStr.split('-')[0];
+  const dayData = await fetchDayDataV1(year, yyyymmdd, dateStr);
+
+  const activeStadiumCodes: number[] = [];
+  const stadiumRaces: Record<number, RaceScheduleItem[]> = {};
+
+  if (dayData && dayData.programs?.stadiums) {
+    const stadiumsObj = dayData.programs.stadiums;
+    for (const sCodeStr of Object.keys(stadiumsObj)) {
+      const sCode = Number(sCodeStr);
+      if (!isNaN(sCode)) {
+        activeStadiumCodes.push(sCode);
+        const racesObj = stadiumsObj[sCodeStr]?.races || {};
+        const items: RaceScheduleItem[] = [];
+        for (let r = 1; r <= 12; r++) {
+          const race = racesObj[String(r)];
+          let closedAt = '';
+          if (race?.closed_at) {
+            if (race.closed_at.includes(' ')) {
+              closedAt = race.closed_at.split(' ')[1].slice(0, 5);
+            } else if (race.closed_at.includes('T')) {
+              try {
+                const d = new Date(race.closed_at);
+                closedAt = d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
+              } catch {
+                closedAt = '';
+              }
+            } else {
+              closedAt = race.closed_at.slice(0, 5);
+            }
+          }
+          items.push({
+            raceNumber: r,
+            closedAt,
+            title: race?.title || race?.subtitle || '',
+          });
+        }
+        stadiumRaces[sCode] = items;
+      }
+    }
+    activeStadiumCodes.sort((a, b) => a - b);
+  }
+
+  return {
+    activeStadiumCodes,
+    stadiumRaces,
+  };
+}
 
 /**
  * Boatrace Open API v1 から1日分の全場データを取得（30秒インメモリキャッシュ）

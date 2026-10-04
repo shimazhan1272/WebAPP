@@ -10,6 +10,8 @@ interface InputAreaProps {
   nExacta: number;
   nTrio: number;
   isLoading: boolean;
+  activeStadiumCodes?: number[];
+  raceSchedule?: { raceNumber: number; closedAt: string; title?: string }[];
   onDateChange: (date: string) => void;
   onStadiumChange: (code: number) => void;
   onRaceNumberChange: (num: number) => void;
@@ -27,6 +29,8 @@ export const InputArea: React.FC<InputAreaProps> = ({
   nExacta,
   nTrio,
   isLoading,
+  activeStadiumCodes,
+  raceSchedule,
   onDateChange,
   onStadiumChange,
   onRaceNumberChange,
@@ -37,6 +41,14 @@ export const InputArea: React.FC<InputAreaProps> = ({
 }) => {
   // 0〜30 の選択肢リスト
   const betCountOptions = Array.from({ length: 31 }, (_, i) => i);
+
+  // 開催場のみフィルタ（開催データがある場合は非開催場を非表示）
+  const displayStadiums = React.useMemo(() => {
+    if (activeStadiumCodes && activeStadiumCodes.length > 0) {
+      return STADIUMS.filter((s) => activeStadiumCodes.includes(s.code));
+    }
+    return STADIUMS;
+  }, [activeStadiumCodes]);
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/90 p-4 sm:p-5 shadow-lg">
@@ -85,18 +97,23 @@ export const InputArea: React.FC<InputAreaProps> = ({
             />
           </div>
 
-          {/* レース場（全24場） */}
+          {/* レース場（開催場のみ表示） */}
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-1.5">
               <MapPin className="w-3.5 h-3.5 text-sky-400" />
-              <span>レース場（全24場）</span>
+              <span>
+                レース場
+                {activeStadiumCodes && activeStadiumCodes.length > 0
+                  ? `（開催: ${displayStadiums.length}場）`
+                  : '（全24場）'}
+              </span>
             </label>
             <select
               value={stadiumCode}
               onChange={(e) => onStadiumChange(Number(e.target.value))}
               className="w-full h-11 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
             >
-              {STADIUMS.map((s) => (
+              {displayStadiums.map((s) => (
                 <option key={s.code} value={s.code}>
                   {String(s.code).padStart(2, '0')} {s.name} ({s.location})
                 </option>
@@ -104,7 +121,7 @@ export const InputArea: React.FC<InputAreaProps> = ({
             </select>
           </div>
 
-          {/* レース番号（1〜12） */}
+          {/* レース番号（1〜12、締切時刻を表示: 例 6R 16:10締切） */}
           <div>
             <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 mb-1.5">
               <Flag className="w-3.5 h-3.5 text-sky-400" />
@@ -115,11 +132,16 @@ export const InputArea: React.FC<InputAreaProps> = ({
               onChange={(e) => onRaceNumberChange(Number(e.target.value))}
               className="w-full h-11 px-3 rounded-lg bg-slate-800 border border-slate-700 text-white text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:border-transparent transition"
             >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((r) => (
-                <option key={r} value={r}>
-                  第{r}レース ({r}R)
-                </option>
-              ))}
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((r) => {
+                const sched = raceSchedule?.find((s) => s.raceNumber === r);
+                const closedAt = sched?.closedAt;
+                const label = closedAt ? `${r}R ${closedAt}締切` : `${r}R`;
+                return (
+                  <option key={r} value={r}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
           </div>
         </div>

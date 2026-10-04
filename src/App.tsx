@@ -12,7 +12,13 @@ import {
   BoatData,
 } from './types/boatrace';
 import { predict } from './utils/predictor';
-import { fetchRaceData, getNextRequestId, getTodayJST } from './services/boatraceApi';
+import {
+  fetchRaceData,
+  fetchDaySchedule,
+  getNextRequestId,
+  getTodayJST,
+  DaySchedule,
+} from './services/boatraceApi';
 import { InputArea } from './components/InputArea';
 import { ResultHeader } from './components/ResultHeader';
 import { RacerTable } from './components/RacerTable';
@@ -112,6 +118,35 @@ export default function App() {
     boats: BoatData[];
     weather: WeatherData | null;
   } | null>(null);
+
+  // 指定日の開催スケジュール（開催場一覧・各レース締切時刻）
+  const [daySchedule, setDaySchedule] = useState<DaySchedule>({
+    activeStadiumCodes: [],
+    stadiumRaces: {},
+  });
+
+  // 日付変更時に開催場一覧および各レース締切スケジュールを取得
+  useEffect(() => {
+    let isCurrent = true;
+    fetchDaySchedule(date)
+      .then((sched) => {
+        if (!isCurrent) return;
+        setDaySchedule(sched);
+        // 選択中のレース場がその日の開催場に含まれていなければ、最初の開催場に自動切り替え
+        if (sched.activeStadiumCodes.length > 0) {
+          if (!sched.activeStadiumCodes.includes(stadiumCode)) {
+            const firstActive = sched.activeStadiumCodes[0];
+            setStadiumCode(firstActive);
+            localStorage.setItem(LOCAL_STORAGE_KEYS.STADIUM, String(firstActive));
+          }
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [date]);
 
   // 入力変更の保存
   useEffect(() => {
@@ -284,6 +319,8 @@ export default function App() {
             nExacta={nExacta}
             nTrio={nTrio}
             isLoading={isLoading}
+            activeStadiumCodes={daySchedule.activeStadiumCodes}
+            raceSchedule={daySchedule.stadiumRaces[stadiumCode] || []}
             onDateChange={setDate}
             onStadiumChange={setStadiumCode}
             onRaceNumberChange={setRaceNumber}
